@@ -23,6 +23,11 @@ public class UserController {
         this.userService = userService;
     }
 
+    @GetMapping("/health")
+    public String healthCheck() {
+        return "User Service is running!";
+    }
+
     @GetMapping
     public List<User> getAllUsers() {
         return userService.getAllUsers();
