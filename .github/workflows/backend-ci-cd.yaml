@@ -1,4 +1,4 @@
-name: Backend CI/CD
+name: Backend CI/CD (Prod)
 
 on:
   push:
@@ -20,21 +20,57 @@ jobs:
       - name: Build Spring Boot
         run: mvn clean package -DskipTests
 
-      - name: Configure AWS
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
 
-      - name: Login to ECR
+      - name: Login to Amazon ECR
         run: |
           aws ecr get-login-password | docker login \
             --username AWS \
             --password-stdin ${{ secrets.ECR_URI }}
 
-      - name: Build & Push Docker Image
+      - name: Build & Push Docker Image (Immutable Tag)
         run: |
-          docker build -t backend .
-          docker tag backend:latest ${{ secrets.ECR_URI }}:latest
-          docker push ${{ secrets.ECR_URI }}:latest
+          IMAGE_TAG=${GITHUB_SHA}
+          docker build -t backend:$IMAGE_TAG .
+          docker tag backend:$IMAGE_TAG ${{ secrets.ECR_URI }}:$IMAGE_TAG
+          docker push ${{ secrets.ECR_URI }}:$IMAGE_TAG
+          echo "IMAGE_URI=${{ secrets.ECR_URI }}:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Get current ECS task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ vars.TASK_FAMILY }} \
+            --query taskDefinition \
+            > task-def.json
+
+      - name: Prepare new task definition revision
+        run: |
+          jq '
+            .containerDefinitions[0].image = env.IMAGE_URI
+            | del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+          ' task-def.json > new-task-def.json
+
+      - name: Register new task definition
+        run: |
+          aws ecs register-task-definition \
+            --cli-input-json file://new-task-def.json
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster ${{ vars.ECS_CLUSTER }} \
+            --service ${{ vars.ECS_SERVICE }} \
+            --task-definition ${{ vars.TASK_FAMILY }}
