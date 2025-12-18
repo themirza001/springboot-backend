@@ -12,7 +12,7 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([{
     name  = "springboot"
-    image = "REPLACE_WITH_ECR_IMAGE"
+    image = "879381285199.dkr.ecr.ap-south-1.amazonaws.com/springboot-backend"
 
     portMappings = [{
       containerPort = 8080
