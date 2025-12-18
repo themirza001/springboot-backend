@@ -9,7 +9,7 @@ resource "aws_db_instance" "rds" {
   engine_version         = "15"
   instance_class         = "db.t3.micro"
   db_name                = "appdb"
-  username               = "admin"
+  username               = "mirza"
   password               = "mirza123"
   skip_final_snapshot    = true
   publicly_accessible    = false
